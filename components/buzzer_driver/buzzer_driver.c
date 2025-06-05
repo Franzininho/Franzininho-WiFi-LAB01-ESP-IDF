@@ -1,6 +1,25 @@
-/*
+/**
  * SPDX-License-Identifier: MIT
  *
+ * Copyright (c) 2025 franzininho
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
  */
 
 /**
@@ -16,6 +35,7 @@
  */
 
 #include <stdio.h>
+#include "esp_log.h"
 #include "driver/dac_cosine.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -29,7 +49,7 @@
 #define BUZZER_ATTENUATION DAC_COSINE_ATTEN_DB_12
 #endif
 
-static const char *m_task_name = "BUZZER_D";
+static const char *s_TAG = "BUZZER_D";
 
 struct driver_state {
 
@@ -52,7 +72,7 @@ struct driver_state {
   esp_err_t rc;
 };
 
-static struct driver_state *m_d_statep = NULL;
+static struct driver_state *s_d_statep = NULL;
 
 /**
  * @brief Inicializacao interna do driver do buzzer.
@@ -64,7 +84,7 @@ static struct driver_state *m_d_statep = NULL;
  *    - Negative value: Error
  *
  */
-static esp_err_t m_BuzzerInit(void);
+static esp_err_t s_BuzzerInit(void);
 
 /**
  * @brief Loop principal da tarefa BUZZER_D
@@ -75,15 +95,15 @@ static esp_err_t m_BuzzerInit(void);
  * Nao utilizado. arg = NULL
  *
  */
-static void m_BuzzerTask(void *pvParameters) {
+static void s_BuzzerTask(void *pvParameters) {
 
   struct driver_state d_state;
-  m_d_statep = &d_state;
+  s_d_statep = &d_state;
 
-  if (m_BuzzerInit()) {
-    fprintf(stderr, "Erro durante a initializacao do driver %s\n"
-                    "error code: %d \n", m_task_name, d_state.rc);
-    m_d_statep = NULL;
+  if (s_BuzzerInit()) {
+    ESP_LOGE(s_TAG, "Erro durante a initializacao do driver.\n"
+                    "error code: %d \n", d_state.rc);
+    s_d_statep = NULL;
     vTaskDelete(NULL);
     return;
   }
@@ -112,15 +132,15 @@ static void m_BuzzerTask(void *pvParameters) {
   return;
 }
 
-esp_err_t m_BuzzerInit(void) {
+esp_err_t s_BuzzerInit(void) {
 
-  m_d_statep->rc = ESP_OK;
+  s_d_statep->rc = ESP_OK;
 
   //Para suspender ou retomar loop principal
-  m_d_statep->task_handle = xTaskGetCurrentTaskHandle();
+  s_d_statep->task_handle = xTaskGetCurrentTaskHandle();
 
   //Desativa modo beat
-  m_d_statep->beat = 0;
+  s_d_statep->beat = 0;
 
   dac_cosine_config_t cos0_cfg = {
         .chan_id = DAC_CHAN_0,
@@ -132,9 +152,9 @@ esp_err_t m_BuzzerInit(void) {
         .flags.force_set_freq = true,
   };
 
-  m_d_statep->rc = dac_cosine_new_channel(&cos0_cfg, &(m_d_statep->dac0_handle));
+  s_d_statep->rc = dac_cosine_new_channel(&cos0_cfg, &(s_d_statep->dac0_handle));
 
-  return m_d_statep->rc;
+  return s_d_statep->rc;
 }
 
 
@@ -142,14 +162,14 @@ esp_err_t m_BuzzerInit(void) {
  * Apenas registra a tarefa no sistema, a inicializacao
  * do dac_0 e realizada no init privado. */
 esp_err_t BuzzerInit() {
-  if (m_d_statep) {
+  if (s_d_statep) {
     return ESP_ERR_NOT_ALLOWED;
   }
 
   /*  Registra a tarefa BUZZER_D */
-  if (xTaskCreate(m_BuzzerTask, m_task_name, CONFIG_BUZZER_TASK_STACK_SIZE, NULL,
+  if (xTaskCreate(s_BuzzerTask, s_TAG, CONFIG_BUZZER_TASK_STACK_SIZE, NULL,
                   CONFIG_BUZZER_TASK_PRIORITY, NULL) != pdPASS) {
-    fprintf(stderr, "Erro criando a tarefa %s...\n", m_task_name);
+    ESP_LOGE(s_TAG, "Erro criando a tarefa %s...\n", s_TAG);
     return ESP_FAIL;
   }
 
@@ -157,13 +177,13 @@ esp_err_t BuzzerInit() {
 }
 
 esp_err_t BuzzerSet(char value) {
-  if (m_d_statep) {
-    m_d_statep->beat = 0;
+  if (s_d_statep) {
+    s_d_statep->beat = 0;
     if (value) {
-      dac_cosine_start(m_d_statep->dac0_handle);
+      dac_cosine_start(s_d_statep->dac0_handle);
     }
     else {
-      dac_cosine_stop(m_d_statep->dac0_handle);
+      dac_cosine_stop(s_d_statep->dac0_handle);
     }
     return ESP_OK;
 
@@ -172,11 +192,11 @@ esp_err_t BuzzerSet(char value) {
 }
 
 esp_err_t BuzzerBeat(unsigned period, unsigned duty_cycle) {
-  if (m_d_statep) {
-    m_d_statep->period_on = period * duty_cycle / 100;
-    m_d_statep->period_off = period - m_d_statep->period_on;
-    m_d_statep->beat = 1;
-    vTaskResume(m_d_statep->task_handle);
+  if (s_d_statep) {
+    s_d_statep->period_on = period * duty_cycle / 100;
+    s_d_statep->period_off = period - s_d_statep->period_on;
+    s_d_statep->beat = 1;
+    vTaskResume(s_d_statep->task_handle);
     return ESP_OK;
   }
   return ESP_ERR_INVALID_STATE;
