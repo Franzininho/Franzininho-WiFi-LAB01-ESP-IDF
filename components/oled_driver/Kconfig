@@ -1,0 +1,41 @@
+menu "OLED Driver"
+
+    config OLED_I2C_BUS_PORT
+        int "OLED Display Bus Port"
+        default 0
+
+    config OLED_PIXEL_CLOCK_HZ
+        int "OLED I2C port clock Hz"
+        range 0 400000
+        default 400000
+
+    config OLED_PIN_NUM_SDA
+        int "OLED SDA GPIO Number"
+        default 8
+
+    config OLED_PIN_NUM_SCL
+        int "OLED SCL GPIO Number"
+        default 9
+
+    config OLED_PIN_NUM_RST
+        int "OLED Reset GPIO Number"
+        default -1
+
+    config OLED_I2C_HW_ADDR
+        hex "OLED I2C HW Address"
+        default 0x3C
+
+    config OLED_LCD_H_RES 
+        int "OLED LCD Horizontal Resolution"
+        default 128
+
+    config OLED_LCD_V_RES
+        int "OLED LCD Vertical Resolution"
+        default 64
+
+    config OLED_LCD_CONTRAST
+        int "OLED LCD Contrast"
+        range 0 255
+        default 63
+
+endmenu
